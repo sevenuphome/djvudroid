@@ -6,7 +6,8 @@
         you can open djvu files from your file manager. Note important thing about memory consumption.
         Java DjVu library used by DjvuDroid targeted at 64MB versus 16MB allocation per android application.
         Hence it may crash occasionally with Out of Memory. Especially when you open two documents in one process.
-        To minimize crashes use Exit menu action that stops VM and frees all process memory immediately.
+        To minimize crashes use Exit menu action that stops VM and frees all process memory immediately. Feel free to send us
+        your feedback at http://code.google.com/p/djvudroid/ as issues.
     </string>
     <string name="app_name"></string>
 </resources>
