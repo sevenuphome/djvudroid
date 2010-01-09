@@ -21,7 +21,7 @@
     <artifactId>djvudroid</artifactId>
     <packaging>apk</packaging>
     <name>DjvuDroid</name>
-    <version>1.0</version>
+    <version>1.1</version>
 
     <dependencies>
         <dependency>
