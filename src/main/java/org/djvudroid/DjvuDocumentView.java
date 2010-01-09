@@ -20,6 +20,7 @@ public class DjvuDocumentView extends ScrollView
     private final Map<Integer, Bitmap> visiblePageNumToBitmap = new HashMap<Integer, Bitmap>();
     private final Set<Integer> decodingPageNums = new HashSet<Integer>();
     private boolean isInitialized = false;
+    private int savedPage;
 
     public DjvuDocumentView(Context context)
     {
@@ -50,6 +51,13 @@ public class DjvuDocumentView extends ScrollView
             linearLayout.addView(frameLayout);
         }
         addView(linearLayout);
+        post(new Runnable()
+        {
+            public void run()
+            {
+                scrollTo(0, pages.get(savedPage).getTop());
+            }
+        });
         isInitialized = true;
     }
 
@@ -182,5 +190,22 @@ public class DjvuDocumentView extends ScrollView
     public void showDocument()
     {
         decodePage(0);
+    }
+
+    public void setSavedPage(int savedPage)
+    {
+        this.savedPage = savedPage;
+    }
+
+    public int getPageToSave()
+    {
+        for (Map.Entry<Integer, FrameLayout> entry : pages.entrySet())
+        {
+            if (isPageVisible(entry.getValue()))
+            {
+                return entry.getKey();
+            }
+        }
+        return 0;
     }
 }

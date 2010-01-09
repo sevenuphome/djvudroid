@@ -94,7 +94,11 @@ public class DecodeService
 
     public void stopDecoding(int pageNum)
     {
-        decodingFutures.remove(pageNum).cancel(false);
+        final Future<?> future = decodingFutures.remove(pageNum);
+        if (future != null)
+        {
+            future.cancel(false);
+        }
     }
 
     private void performDecode(DecodeTask currentDecodeTask)
