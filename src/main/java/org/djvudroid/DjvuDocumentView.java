@@ -62,7 +62,7 @@ public class DjvuDocumentView extends ScrollView
             if (!isPageVisible(pages.get(decodingPageNum)))
             {
                 decodeService.stopDecoding(decodingPageNum);
-                decodingPageNums.remove(decodingPageNum);
+                removeDecodingStatus(decodingPageNum);
             }
         }
         for (Integer visiblePageNum : new HashMap<Integer, Bitmap>(visiblePageNumToBitmap).keySet())
@@ -93,7 +93,7 @@ public class DjvuDocumentView extends ScrollView
         {
             return;
         }
-        decodingPageNums.add(pageNum);
+        addDecodingStatus(pageNum);
         decodeService.decodePage(pageNum, new DecodeService.DecodeCallback()
         {
             public void decodeComplete(final Bitmap bitmap)
@@ -109,6 +109,29 @@ public class DjvuDocumentView extends ScrollView
         });
     }
 
+    private void addDecodingStatus(Integer pageNum)
+    {
+        if (!decodingPageNums.contains(pageNum) && isInitialized)
+        {
+            final ProgressBar bar = new ProgressBar(getContext());
+            bar.setIndeterminate(true);
+            bar.setLayoutParams(new LayoutParams(ViewGroup.LayoutParams.FILL_PARENT, ViewGroup.LayoutParams.FILL_PARENT));
+            bar.setTag(ProgressBar.class);
+            pages.get(pageNum).addView(bar);
+        }
+        decodingPageNums.add(pageNum);
+    }
+
+    private void removeDecodingStatus(Integer decodingPageNum)
+    {
+        if (decodingPageNums.contains(decodingPageNum) && isInitialized)
+        {
+            final FrameLayout page = pages.get(decodingPageNum);
+            page.removeView(page.findViewWithTag(ProgressBar.class));
+        }
+        decodingPageNums.remove(decodingPageNum);
+    }
+
     private boolean isPageVisible(FrameLayout page)
     {
         return page.getGlobalVisibleRect(new Rect());
@@ -117,7 +140,7 @@ public class DjvuDocumentView extends ScrollView
     private void submitBitmap(Integer pageNum, Bitmap bitmap)
     {
         addImageToPage(pageNum, bitmap);
-        decodingPageNums.remove(pageNum);
+        removeDecodingStatus(pageNum);
     }
 
     private void addImageToPage(Integer pageNum, Bitmap bitmap)
