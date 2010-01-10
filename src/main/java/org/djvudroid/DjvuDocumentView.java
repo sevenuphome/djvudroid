@@ -26,6 +26,7 @@ public class DjvuDocumentView extends ScrollView
     {
         super(context);
         initLayout();
+        setKeepScreenOn(true);
     }
 
     public void setDecodeService(DecodeService decodeService)

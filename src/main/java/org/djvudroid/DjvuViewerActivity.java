@@ -1,6 +1,7 @@
 package org.djvudroid;
 
 import android.app.Activity;
+import android.app.Dialog;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.view.Menu;
@@ -11,11 +12,16 @@ import java.io.FileNotFoundException;
 
 public class DjvuViewerActivity extends Activity
 {
-    //Reuse decodeService in process cause it holds decode caches
-    private final static DecodeService decodeService = new DecodeService();
     private static final int MENU_EXIT = 0;
-    private DjvuDocumentView documentView;
+    private static final int MENU_GOTO = 1;
+
+    private static final int DIALOG_GOTO = 0;
+
     private static final String DOCUMENT_VIEW_STATE_PREFERENCES = "DjvuDocumentViewState";
+    private final static DecodeService decodeService = new DecodeService();
+
+    //Reuse decodeService in process cause it holds decode caches
+    private DjvuDocumentView documentView;
 
     /**
      * Called when the activity is first created.
@@ -58,6 +64,7 @@ public class DjvuViewerActivity extends Activity
     public boolean onCreateOptionsMenu(Menu menu)
     {
         menu.add(0, MENU_EXIT, 0, "Exit");
+        menu.add(0, MENU_GOTO, 0, "Go to page");
         return true;
     }
 
@@ -69,7 +76,21 @@ public class DjvuViewerActivity extends Activity
             case MENU_EXIT:
                 System.exit(0);
                 return true;
+            case MENU_GOTO:
+                showDialog(DIALOG_GOTO);
+                return true;
         }
         return false;
+    }
+
+    @Override
+    protected Dialog onCreateDialog(int id)
+    {
+        switch (id)
+        {
+            case DIALOG_GOTO:
+                return new GoToPageDialog(this, documentView, decodeService);
+        }
+        return null;
     }
 }
