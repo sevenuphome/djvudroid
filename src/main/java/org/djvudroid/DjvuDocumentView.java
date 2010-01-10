@@ -20,11 +20,12 @@ public class DjvuDocumentView extends ScrollView
     private final Map<Integer, Bitmap> visiblePageNumToBitmap = new HashMap<Integer, Bitmap>();
     private final Set<Integer> decodingPageNums = new HashSet<Integer>();
     private boolean isInitialized = false;
-    private int savedPage;
+    private int pageToGoTo;
 
     public DjvuDocumentView(Context context)
     {
         super(context);
+        initLayout();
     }
 
     public void setDecodeService(DecodeService decodeService)
@@ -38,27 +39,55 @@ public class DjvuDocumentView extends ScrollView
         {
             return;
         }
+        final LinearLayout linearLayout = getMainLayout();
+        final GRect rect = decodeService.getTargetRect();
+        final int width = rect.width();
+        final int height = rect.height();
+        for (int i = 0; i < decodeService.getPageCount(); i++)
+        {
+            addPageToMainLayoutIfNotAvailable(linearLayout, width, height, i);
+        }
+        goToPageImpl(pageToGoTo);
+        isInitialized = true;
+    }
+
+    private void addPageToMainLayoutIfNotAvailable(LinearLayout mainLayout, int width, int height, int pageIndex)
+    {
+        if (pages.containsKey(pageIndex))
+        {
+            return;
+        }
+        final FrameLayout frameLayout = new FrameLayout(getContext());
+        frameLayout.setLayoutParams(new LayoutParams(width, height));
+        frameLayout.addView(createPageNumView(pageIndex));
+        pages.put(pageIndex, frameLayout);
+        mainLayout.addView(frameLayout);
+    }
+
+    private LinearLayout getMainLayout()
+    {
+        return (LinearLayout) findViewWithTag(LinearLayout.class);
+    }
+
+    private LinearLayout initLayout()
+    {
         final LinearLayout linearLayout = new LinearLayout(getContext());
         linearLayout.setOrientation(LinearLayout.VERTICAL);
         linearLayout.setGravity(Gravity.CENTER_HORIZONTAL);
-        for (int i = 0; i < decodeService.getPageCount(); i++)
-        {
-            final FrameLayout frameLayout = new FrameLayout(getContext());
-            final GRect rect = decodeService.getTargetRect();
-            frameLayout.setLayoutParams(new LayoutParams(rect.width(), rect.height()));
-            frameLayout.addView(createPageNumView(i));
-            pages.put(i, frameLayout);
-            linearLayout.addView(frameLayout);
-        }
+        linearLayout.setTag(LinearLayout.class);
         addView(linearLayout);
+        return linearLayout;
+    }
+
+    private void goToPageImpl(final int toPage)
+    {
         post(new Runnable()
         {
             public void run()
             {
-                scrollTo(0, pages.get(savedPage).getTop());
+                scrollTo(0, pages.get(toPage).getTop());
             }
         });
-        isInitialized = true;
     }
 
     @Override
@@ -101,7 +130,8 @@ public class DjvuDocumentView extends ScrollView
         {
             return;
         }
-        addDecodingStatus(pageNum);
+        addPageToMainLayoutIfNotAvailable(getMainLayout(), getWidth(), getHeight(), pageNum);
+        setDecodingStatus(pageNum);
         decodeService.decodePage(pageNum, new DecodeService.DecodeCallback()
         {
             public void decodeComplete(final Bitmap bitmap)
@@ -117,9 +147,9 @@ public class DjvuDocumentView extends ScrollView
         });
     }
 
-    private void addDecodingStatus(Integer pageNum)
+    private void setDecodingStatus(Integer pageNum)
     {
-        if (!decodingPageNums.contains(pageNum) && isInitialized)
+        if (!decodingPageNums.contains(pageNum) && pages.containsKey(pageNum))
         {
             final ProgressBar bar = new ProgressBar(getContext());
             bar.setIndeterminate(true);
@@ -132,7 +162,7 @@ public class DjvuDocumentView extends ScrollView
 
     private void removeDecodingStatus(Integer decodingPageNum)
     {
-        if (decodingPageNums.contains(decodingPageNum) && isInitialized)
+        if (decodingPageNums.contains(decodingPageNum) && pages.containsKey(decodingPageNum))
         {
             final FrameLayout page = pages.get(decodingPageNum);
             page.removeView(page.findViewWithTag(ProgressBar.class));
@@ -189,15 +219,29 @@ public class DjvuDocumentView extends ScrollView
 
     public void showDocument()
     {
-        decodePage(0);
+        // use post to ensure that document view has width and height before decoding begin
+        post(new Runnable()
+        {
+            public void run()
+            {
+                decodePage(0);
+            }
+        });
     }
 
-    public void setSavedPage(int savedPage)
+    public void goToPage(int toPage)
     {
-        this.savedPage = savedPage;
+        if (isInitialized)
+        {
+            goToPageImpl(toPage);
+        }
+        else
+        {
+            pageToGoTo = toPage;
+        }
     }
 
-    public int getPageToSave()
+    public int getCurrentPage()
     {
         for (Map.Entry<Integer, FrameLayout> entry : pages.entrySet())
         {

@@ -40,7 +40,7 @@ public class DjvuViewerActivity extends Activity
         }
         setContentView(documentView);
         final SharedPreferences sharedPreferences = getSharedPreferences(DOCUMENT_VIEW_STATE_PREFERENCES, 0);
-        documentView.setSavedPage(sharedPreferences.getInt(getIntent().getData().toString(), 0));
+        documentView.goToPage(sharedPreferences.getInt(getIntent().getData().toString(), 0));
         documentView.showDocument();
     }
 
@@ -50,7 +50,7 @@ public class DjvuViewerActivity extends Activity
         super.onStop();
         final SharedPreferences sharedPreferences = getSharedPreferences(DOCUMENT_VIEW_STATE_PREFERENCES, 0);
         final SharedPreferences.Editor editor = sharedPreferences.edit();
-        editor.putInt(getIntent().getData().toString(), documentView.getPageToSave());
+        editor.putInt(getIntent().getData().toString(), documentView.getCurrentPage());
         editor.commit();
     }
     
