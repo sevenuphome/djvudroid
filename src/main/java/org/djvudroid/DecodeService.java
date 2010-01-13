@@ -1,6 +1,7 @@
 package org.djvudroid;
 
 import android.graphics.Bitmap;
+import android.net.Uri;
 import android.util.Log;
 import android.view.View;
 import android.widget.ImageView;
@@ -11,9 +12,7 @@ import com.lizardtech.djvu.GRect;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.LinkedList;
 import java.util.Map;
-import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -26,16 +25,23 @@ public class DecodeService
     private GMap map;
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
     public static final String DJVU_DROID = "DjvuDroid";
-    private final Queue<Bitmap> bitmaps = new LinkedList<Bitmap>();
     private final Map<Integer, Future<?>> decodingFutures = new ConcurrentHashMap<Integer, Future<?>>();
+    private BitmapsCacheService bitmapsCacheService;
+    private Uri documentUri;
+
+    public void setBitmapsCacheService(BitmapsCacheService bitmapsCacheService)
+    {
+        this.bitmapsCacheService = bitmapsCacheService;
+    }
 
     public void setContainerView(View containerView)
     {
         this.containerView = containerView;
     }
 
-    public void open(InputStream inputStream)
+    public void open(InputStream inputStream, Uri fileUri)
     {
+        documentUri = fileUri;
         document = new Document();
         try
         {
@@ -110,6 +116,13 @@ public class DecodeService
             return;
         }
         Log.d(DJVU_DROID, "Starting decode of page: " + currentDecodeTask.pageNumber);
+        final Bitmap cachedBitmap = bitmapsCacheService.cachedBitmapFor(documentUri, currentDecodeTask.pageNumber, getTargetWidth());
+        if (cachedBitmap != null)
+        {
+            Log.d(DJVU_DROID, "Found cached bitmap for " + currentDecodeTask.pageNumber);
+            finishDecoding(currentDecodeTask, cachedBitmap);
+            return;
+        }
         DjVuPage vuPage = document.getPage(currentDecodeTask.pageNumber, Document.MAX_PRIORITY, false);
         preloadNextPage(currentDecodeTask.pageNumber);
 
@@ -139,6 +152,12 @@ public class DecodeService
         {
             return;
         }
+        bitmapsCacheService.cacheBitmapFor(documentUri, currentDecodeTask.pageNumber, getTargetWidth(), bitmap);
+        finishDecoding(currentDecodeTask, bitmap);
+    }
+
+    private void finishDecoding(DecodeTask currentDecodeTask, Bitmap bitmap)
+    {
         updateImage(currentDecodeTask, bitmap);
         stopDecoding(currentDecodeTask.pageNumber);
     }
@@ -164,9 +183,19 @@ public class DecodeService
         {
             return;
         }
-        int subsample = calculateSubsample(vuPage, containerView.getWidth());
+        int subsample = calculateSubsample(vuPage);
         GRect rect = calculateRect(vuPage, subsample);
         map = vuPage.getMap(rect, subsample, map);
+    }
+
+    private int calculateSubsample(DjVuPage vuPage)
+    {
+        return calculateSubsample(vuPage, getTargetWidth());
+    }
+
+    private int getTargetWidth()
+    {
+        return containerView.getWidth();
     }
 
     public GRect getTargetRect()
@@ -183,7 +212,7 @@ public class DecodeService
 
     private GRect calculateRect(DjVuPage vuPage)
     {
-        return calculateRect(vuPage, calculateSubsample(vuPage, containerView.getWidth()));
+        return calculateRect(vuPage, calculateSubsample(vuPage));
     }
 
     private GRect calculateRect(DjVuPage vuPage, int subsample)
@@ -203,7 +232,7 @@ public class DecodeService
 
     private Bitmap convertMapToBitmap()
     {
-        return GMapToBitmap.convert(map, getBitmap());
+        return GMapToBitmap.convert(map, null);
     }
 
     private boolean isTaskDead(DecodeTask currentDecodeTask)
@@ -219,14 +248,9 @@ public class DecodeService
         return document.size();
     }
 
-    private Bitmap getBitmap()
-    {
-        return bitmaps.poll();
-    }
-
     public void freeBitmap(Bitmap bitmap)
     {
-        bitmaps.offer(bitmap);
+        bitmap.recycle();
         Log.d(DJVU_DROID, "Bitmap freed: " + bitmap);
     }
 

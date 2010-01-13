@@ -3,6 +3,7 @@ package org.djvudroid;
 import android.app.Activity;
 import android.app.Dialog;
 import android.content.SharedPreferences;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -35,10 +36,12 @@ public class DjvuViewerActivity extends Activity
         documentView = new DjvuDocumentView(this);
         documentView.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.FILL_PARENT, ViewGroup.LayoutParams.FILL_PARENT));
         decodeService.setContainerView(documentView);
+        decodeService.setBitmapsCacheService(new BitmapsCacheService(this));
         documentView.setDecodeService(decodeService);
         try
         {
-            decodeService.open(getContentResolver().openInputStream(getIntent().getData()));
+            final Uri fileUri = getIntent().getData();
+            decodeService.open(getContentResolver().openInputStream(fileUri), fileUri);
         }
         catch (FileNotFoundException e)
         {
