@@ -30,12 +30,6 @@
             <scope>provided</scope>
             <version>1.5_r3</version>
         </dependency>
-
-        <dependency>
-            <groupId>javadjvu</groupId>
-            <artifactId>javadjvu</artifactId>
-            <version>0.8.9</version>
-        </dependency>
     </dependencies>
 
     <build>

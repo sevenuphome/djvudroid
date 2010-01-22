@@ -1,17 +1,16 @@
 package org.djvudroid;
 
+import android.content.ContentResolver;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.util.Log;
 import android.view.View;
 import android.widget.ImageView;
-import com.lizardtech.djvu.DjVuPage;
-import com.lizardtech.djvu.Document;
-import com.lizardtech.djvu.GMap;
-import com.lizardtech.djvu.GRect;
+import org.djvudroid.codec.DjvuContext;
+import org.djvudroid.codec.DjvuDocument;
+import org.djvudroid.codec.DjvuPage;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -20,18 +19,22 @@ import java.util.concurrent.Future;
 
 public class DecodeService
 {
+    private final DjvuContext djvuContext;
+
     private View containerView;
-    private Document document;
-    private GMap map;
+    private DjvuDocument document;
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
     public static final String DJVU_DROID = "DjvuDroid";
     private final Map<Integer, Future<?>> decodingFutures = new ConcurrentHashMap<Integer, Future<?>>();
-    private BitmapsCacheService bitmapsCacheService;
-    private Uri documentUri;
 
-    public void setBitmapsCacheService(BitmapsCacheService bitmapsCacheService)
+    public DecodeService()
     {
-        this.bitmapsCacheService = bitmapsCacheService;
+        djvuContext = new DjvuContext();
+    }
+
+    public void setContentResolver(ContentResolver contentResolver)
+    {
+        djvuContext.setContentResolver(contentResolver);
     }
 
     public void setContainerView(View containerView)
@@ -39,19 +42,9 @@ public class DecodeService
         this.containerView = containerView;
     }
 
-    public void open(InputStream inputStream, Uri fileUri)
+    public void open(Uri fileUri)
     {
-        documentUri = fileUri;
-        document = new Document();
-        try
-        {
-            document.read(inputStream);
-            document.setAsync(true);
-        }
-        catch (IOException e)
-        {
-            throw new RuntimeException(e);
-        }
+        document = djvuContext.openDocument(fileUri);
     }
 
     public void decodePage(int pageNum, final ImageView imageView)
@@ -116,14 +109,7 @@ public class DecodeService
             return;
         }
         Log.d(DJVU_DROID, "Starting decode of page: " + currentDecodeTask.pageNumber);
-        final Bitmap cachedBitmap = bitmapsCacheService.cachedBitmapFor(documentUri, currentDecodeTask.pageNumber, getTargetWidth());
-        if (cachedBitmap != null)
-        {
-            Log.d(DJVU_DROID, "Found cached bitmap for " + currentDecodeTask.pageNumber);
-            finishDecoding(currentDecodeTask, cachedBitmap);
-            return;
-        }
-        DjVuPage vuPage = document.getPage(currentDecodeTask.pageNumber, Document.MAX_PRIORITY, false);
+        DjvuPage vuPage = document.getPage(currentDecodeTask.pageNumber);
         preloadNextPage(currentDecodeTask.pageNumber);
 
         while (vuPage.isDecoding())
@@ -134,26 +120,34 @@ public class DecodeService
             }
             waitForDecode(vuPage);
         }
-        Log.d(DJVU_DROID, "Starting map update");
-        updateMap(vuPage);
-        Log.d(DJVU_DROID, "Map update finished");
-        if (map == null)
-        {
-            return;
-        }
         if (isTaskDead(currentDecodeTask))
         {
             return;
         }
-        Log.d(DJVU_DROID, "Starting converting map to bitmap");
-        final Bitmap bitmap = convertMapToBitmap();
+        Log.d(DJVU_DROID, "Start converting map to bitmap");
+        float scale = calculateScale(vuPage);
+        final Bitmap bitmap = vuPage.renderBitmap(getScaledWidth(vuPage, scale), getScaledHeight(vuPage, scale));
         Log.d(DJVU_DROID, "Converting map to bitmap finished");
         if (isTaskDead(currentDecodeTask))
         {
             return;
         }
-        bitmapsCacheService.cacheBitmapFor(documentUri, currentDecodeTask.pageNumber, getTargetWidth(), bitmap);
         finishDecoding(currentDecodeTask, bitmap);
+    }
+
+    private int getScaledHeight(DjvuPage vuPage, float scale)
+    {
+        return (int) (scale * vuPage.getHeight());
+    }
+
+    private int getScaledWidth(DjvuPage vuPage, float scale)
+    {
+        return (int) (scale * vuPage.getWidth());
+    }
+
+    private float calculateScale(DjvuPage djvuPage)
+    {
+        return 1.0f * getTargetWidth() / djvuPage.getWidth();
     }
 
     private void finishDecoding(DecodeTask currentDecodeTask, Bitmap bitmap)
@@ -169,28 +163,12 @@ public class DecodeService
         {
             return;
         }
-        document.getPage(nextPage, Document.MIN_PRIORITY, false);
+        document.getPage(nextPage);
     }
 
-    private void waitForDecode(DjVuPage vuPage)
+    private void waitForDecode(DjvuPage vuPage)
     {
-        vuPage.waitForCodec(vuPage.progressiveLock, 200);
-    }
-
-    private void updateMap(DjVuPage vuPage)
-    {
-        if (vuPage.getInfo() == null)
-        {
-            return;
-        }
-        int subsample = calculateSubsample(vuPage);
-        GRect rect = calculateRect(vuPage, subsample);
-        map = vuPage.getMap(rect, subsample, map);
-    }
-
-    private int calculateSubsample(DjVuPage vuPage)
-    {
-        return calculateSubsample(vuPage, getTargetWidth());
+        vuPage.waitForDecode();
     }
 
     private int getTargetWidth()
@@ -198,41 +176,21 @@ public class DecodeService
         return containerView.getWidth();
     }
 
-    public GRect getTargetRect()
+    public int getEffectivePagesWidth()
     {
-        try
-        {
-            return calculateRect(document.getPage(0, Document.MAX_PRIORITY, false));
-        }
-        catch (IOException e)
-        {
-            throw new RuntimeException(e);
-        }
+        final DjvuPage page = document.getPage(0);
+        return getScaledWidth(page, calculateScale(page));
     }
 
-    private GRect calculateRect(DjVuPage vuPage)
+    public int getEffectivePagesHeight()
     {
-        return calculateRect(vuPage, calculateSubsample(vuPage));
-    }
-
-    private GRect calculateRect(DjVuPage vuPage, int subsample)
-    {
-        return new GRect(0, 0, vuPage.getInfo().width / subsample, vuPage.getInfo().height / subsample);
-    }
-
-    private int calculateSubsample(DjVuPage vuPage, int targetWidth)
-    {
-        return (int) Math.ceil(vuPage.getInfo().width * 1.0 / targetWidth);
+        final DjvuPage page = document.getPage(0);
+        return getScaledHeight(page, calculateScale(page));
     }
 
     private void updateImage(final DecodeTask currentDecodeTask, Bitmap bitmap)
     {
         currentDecodeTask.decodeCallback.decodeComplete(bitmap);
-    }
-
-    private Bitmap convertMapToBitmap()
-    {
-        return GMapToBitmap.convert(map, null);
     }
 
     private boolean isTaskDead(DecodeTask currentDecodeTask)
@@ -245,7 +203,7 @@ public class DecodeService
 
     public int getPageCount()
     {
-        return document.size();
+        return document.getPageCount();
     }
 
     public void freeBitmap(Bitmap bitmap)

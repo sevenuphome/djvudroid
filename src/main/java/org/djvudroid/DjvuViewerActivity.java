@@ -3,13 +3,11 @@ package org.djvudroid;
 import android.app.Activity;
 import android.app.Dialog;
 import android.content.SharedPreferences;
-import android.net.Uri;
 import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.ViewGroup;
-
-import java.io.FileNotFoundException;
+import org.djvudroid.codec.LibraryExtracter;
 
 public class DjvuViewerActivity extends Activity
 {
@@ -19,7 +17,7 @@ public class DjvuViewerActivity extends Activity
     private static final int DIALOG_GOTO = 0;
 
     private static final String DOCUMENT_VIEW_STATE_PREFERENCES = "DjvuDocumentViewState";
-    private final static DecodeService decodeService = new DecodeService();
+    private static DecodeService decodeService;
 
     //Reuse decodeService in process cause it holds decode caches
     private DjvuDocumentView documentView;
@@ -31,26 +29,26 @@ public class DjvuViewerActivity extends Activity
     public void onCreate(Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
-        //Mb already running decoding threads in this process so let's GC'em
-        System.gc();
+        LibraryExtracter.extractCodecLibrary(this);
+        initDecodeService();
         documentView = new DjvuDocumentView(this);
         documentView.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.FILL_PARENT, ViewGroup.LayoutParams.FILL_PARENT));
+        decodeService.setContentResolver(getContentResolver());
         decodeService.setContainerView(documentView);
-        decodeService.setBitmapsCacheService(new BitmapsCacheService(this));
         documentView.setDecodeService(decodeService);
-        try
-        {
-            final Uri fileUri = getIntent().getData();
-            decodeService.open(getContentResolver().openInputStream(fileUri), fileUri);
-        }
-        catch (FileNotFoundException e)
-        {
-            throw new RuntimeException(e);
-        }
+        decodeService.open(getIntent().getData());
         setContentView(documentView);
         final SharedPreferences sharedPreferences = getSharedPreferences(DOCUMENT_VIEW_STATE_PREFERENCES, 0);
         documentView.goToPage(sharedPreferences.getInt(getIntent().getData().toString(), 0));
         documentView.showDocument();
+    }
+
+    private static void initDecodeService()
+    {
+        if (decodeService == null)
+        {
+            decodeService = new DecodeService();
+        }
     }
 
     @Override

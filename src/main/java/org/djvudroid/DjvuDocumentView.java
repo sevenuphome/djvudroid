@@ -6,7 +6,6 @@ import android.graphics.Rect;
 import android.view.Gravity;
 import android.view.ViewGroup;
 import android.widget.*;
-import com.lizardtech.djvu.GRect;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -41,9 +40,8 @@ public class DjvuDocumentView extends ScrollView
             return;
         }
         final LinearLayout linearLayout = getMainLayout();
-        final GRect rect = decodeService.getTargetRect();
-        final int width = rect.width();
-        final int height = rect.height();
+        final int width = decodeService.getEffectivePagesWidth();
+        final int height = decodeService.getEffectivePagesHeight();
         for (int i = 0; i < decodeService.getPageCount(); i++)
         {
             addPageToMainLayoutIfNotAvailable(linearLayout, width, height, i);
