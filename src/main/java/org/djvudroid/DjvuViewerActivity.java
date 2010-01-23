@@ -4,10 +4,14 @@ import android.app.Activity;
 import android.app.Dialog;
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.ViewGroup;
+import android.widget.FrameLayout;
 import org.djvudroid.codec.LibraryExtracter;
+import org.djvudroid.models.ZoomModel;
+import org.djvudroid.views.DjvuZoomControls;
 
 public class DjvuViewerActivity extends Activity
 {
@@ -31,16 +35,36 @@ public class DjvuViewerActivity extends Activity
         super.onCreate(savedInstanceState);
         LibraryExtracter.extractCodecLibrary(this);
         initDecodeService();
-        documentView = new DjvuDocumentView(this);
+        final ZoomModel zoomModel = new ZoomModel();
+        documentView = new DjvuDocumentView(this, zoomModel);
+        zoomModel.addEventListener(documentView);
         documentView.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.FILL_PARENT, ViewGroup.LayoutParams.FILL_PARENT));
         decodeService.setContentResolver(getContentResolver());
         decodeService.setContainerView(documentView);
         documentView.setDecodeService(decodeService);
         decodeService.open(getIntent().getData());
-        setContentView(documentView);
+
+        final FrameLayout frameLayout = createMainContainer();
+        frameLayout.addView(documentView);
+        frameLayout.addView(createZoomControls(zoomModel));
+        setContentView(frameLayout);
+
         final SharedPreferences sharedPreferences = getSharedPreferences(DOCUMENT_VIEW_STATE_PREFERENCES, 0);
         documentView.goToPage(sharedPreferences.getInt(getIntent().getData().toString(), 0));
         documentView.showDocument();
+    }
+
+    private DjvuZoomControls createZoomControls(ZoomModel zoomModel)
+    {
+        final DjvuZoomControls controls = new DjvuZoomControls(this, zoomModel);
+        controls.setGravity(Gravity.RIGHT | Gravity.BOTTOM);
+        zoomModel.addEventListener(controls);
+        return controls;
+    }
+
+    private FrameLayout createMainContainer()
+    {
+        return new FrameLayout(this);
     }
 
     private static void initDecodeService()

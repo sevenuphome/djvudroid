@@ -4,16 +4,20 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.view.Gravity;
+import android.view.View;
 import android.view.ViewGroup;
 import android.widget.*;
+import org.djvudroid.events.ZoomListener;
+import org.djvudroid.models.ZoomModel;
 
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-public class DjvuDocumentView extends ScrollView
+public class DjvuDocumentView extends ScrollView implements ZoomListener
 {
+    private final ZoomModel zoomModel;
     private DecodeService decodeService;
     private final Map<Integer, FrameLayout> pages = new HashMap<Integer, FrameLayout>();
     private final Map<Integer, Bitmap> visiblePageNumToBitmap = new HashMap<Integer, Bitmap>();
@@ -21,9 +25,10 @@ public class DjvuDocumentView extends ScrollView
     private boolean isInitialized = false;
     private int pageToGoTo;
 
-    public DjvuDocumentView(Context context)
+    public DjvuDocumentView(Context context, ZoomModel zoomModel)
     {
         super(context);
+        this.zoomModel = zoomModel;
         initLayout();
         setKeepScreenOn(true);
     }
@@ -93,14 +98,36 @@ public class DjvuDocumentView extends ScrollView
     protected void onScrollChanged(int l, int t, int oldl, int oldt)
     {
         super.onScrollChanged(l, t, oldl, oldt);
-        for (Integer decodingPageNum : new HashSet<Integer>(decodingPageNums))
+        stopDecodingInvisiblePages();
+        removeImageFromInvisiblePages();
+        startDecodingVisiblePages();
+        zoomModel.bringUpZoomControls();
+    }
+
+    private void startDecodingVisiblePages()
+    {
+        startDecodingVisiblePages(false);
+    }
+
+    private void startDecodingVisiblePages(boolean invalidate)
+    {
+        for (final Map.Entry<Integer, FrameLayout> pageNumToPage : pages.entrySet())
         {
-            if (!isPageVisible(pages.get(decodingPageNum)))
+            final FrameLayout page = pageNumToPage.getValue();
+            if (isPageVisible(page))
             {
-                decodeService.stopDecoding(decodingPageNum);
-                removeDecodingStatus(decodingPageNum);
+                final Integer pageNum = pageNumToPage.getKey();
+                if (visiblePageNumToBitmap.containsKey(pageNum) && !invalidate)
+                {
+                    continue;
+                }
+                decodePage(pageNum);
             }
         }
+    }
+
+    private void removeImageFromInvisiblePages()
+    {
         for (Integer visiblePageNum : new HashMap<Integer, Bitmap>(visiblePageNumToBitmap).keySet())
         {
             if (!isPageVisible(pages.get(visiblePageNum)))
@@ -108,19 +135,31 @@ public class DjvuDocumentView extends ScrollView
                 removeImageFromPage(visiblePageNum);
             }
         }
-        for (final Map.Entry<Integer, FrameLayout> pageNumToPage : pages.entrySet())
+    }
+
+    private void stopDecodingInvisiblePages()
+    {
+        for (Integer decodingPageNum : new HashSet<Integer>(decodingPageNums))
         {
-            final FrameLayout page = pageNumToPage.getValue();
-            if (isPageVisible(page))
+            if (!isPageVisible(pages.get(decodingPageNum)))
             {
-                final Integer pageNum = pageNumToPage.getKey();
-                if (visiblePageNumToBitmap.containsKey(pageNum))
-                {
-                    continue;
-                }
-                decodePage(pageNum);
+                stopDecodingPage(decodingPageNum);
             }
         }
+    }
+
+    private void stopDecodingAllPages()
+    {
+        for (Integer decodingPageNum : new HashSet<Integer>(decodingPageNums))
+        {
+            stopDecodingPage(decodingPageNum);
+        }    
+    }
+
+    private void stopDecodingPage(Integer decodingPageNum)
+    {
+        decodeService.stopDecoding(decodingPageNum);
+        removeDecodingStatus(decodingPageNum);
     }
 
     private void decodePage(final Integer pageNum)
@@ -143,7 +182,7 @@ public class DjvuDocumentView extends ScrollView
                     }
                 });
             }
-        });
+        }, zoomModel.getZoom());
     }
 
     private void setDecodingStatus(Integer pageNum)
@@ -176,6 +215,7 @@ public class DjvuDocumentView extends ScrollView
 
     private void submitBitmap(Integer pageNum, Bitmap bitmap)
     {
+        removeImageFromPage(pageNum);
         addImageToPage(pageNum, bitmap);
         removeDecodingStatus(pageNum);
     }
@@ -193,9 +233,14 @@ public class DjvuDocumentView extends ScrollView
     private void removeImageFromPage(Integer fromPage)
     {
         final FrameLayout page = pages.get(fromPage);
-        page.removeView(page.findViewWithTag(ImageView.class));
+        final View imageView = page.findViewWithTag(ImageView.class);
+        if (imageView == null)
+        {
+            return;
+        }
+        page.removeView(imageView);
         final Bitmap bitmap = visiblePageNumToBitmap.remove(fromPage);
-        decodeService.freeBitmap(bitmap);
+        bitmap.recycle();
     }
 
     private ImageView createImageView(Bitmap bitmap)
@@ -250,5 +295,11 @@ public class DjvuDocumentView extends ScrollView
             }
         }
         return 0;
+    }
+
+    public void zoomChanged(float newZoom)
+    {
+        stopDecodingAllPages();
+        startDecodingVisiblePages(true);
     }
 }

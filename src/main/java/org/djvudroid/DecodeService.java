@@ -5,7 +5,6 @@ import android.graphics.Bitmap;
 import android.net.Uri;
 import android.util.Log;
 import android.view.View;
-import android.widget.ImageView;
 import org.djvudroid.codec.DjvuContext;
 import org.djvudroid.codec.DjvuDocument;
 import org.djvudroid.codec.DjvuPage;
@@ -47,26 +46,9 @@ public class DecodeService
         document = djvuContext.openDocument(fileUri);
     }
 
-    public void decodePage(int pageNum, final ImageView imageView)
+    public void decodePage(int pageNum, final DecodeCallback decodeCallback, float zoom)
     {
-        decodePage(pageNum, new DecodeCallback()
-        {
-            public void decodeComplete(final Bitmap bitmap)
-            {
-                imageView.post(new Runnable()
-                {
-                    public void run()
-                    {
-                        imageView.setImageBitmap(bitmap);
-                    }
-                });
-            }
-        });
-    }
-
-    public void decodePage(int pageNum, final DecodeCallback decodeCallback)
-    {
-        final DecodeTask decodeTask = new DecodeTask(pageNum, decodeCallback);
+        final DecodeTask decodeTask = new DecodeTask(pageNum, decodeCallback, zoom);
         synchronized (decodingFutures)
         {
             final Future<?> future = executorService.submit(new Runnable()
@@ -125,7 +107,7 @@ public class DecodeService
             return;
         }
         Log.d(DJVU_DROID, "Start converting map to bitmap");
-        float scale = calculateScale(vuPage);
+        float scale = calculateScale(vuPage) * currentDecodeTask.zoom;
         final Bitmap bitmap = vuPage.renderBitmap(getScaledWidth(vuPage, scale), getScaledHeight(vuPage, scale));
         Log.d(DJVU_DROID, "Converting map to bitmap finished");
         if (isTaskDead(currentDecodeTask))
@@ -206,21 +188,17 @@ public class DecodeService
         return document.getPageCount();
     }
 
-    public void freeBitmap(Bitmap bitmap)
-    {
-        bitmap.recycle();
-        Log.d(DJVU_DROID, "Bitmap freed: " + bitmap);
-    }
-
     private class DecodeTask
     {
         private final int pageNumber;
+        private final float zoom;
         private final DecodeCallback decodeCallback;
 
-        private DecodeTask(int pageNumber, DecodeCallback decodeCallback)
+        private DecodeTask(int pageNumber, DecodeCallback decodeCallback, float zoom)
         {
             this.pageNumber = pageNumber;
             this.decodeCallback = decodeCallback;
+            this.zoom = zoom;
         }
     }
 
