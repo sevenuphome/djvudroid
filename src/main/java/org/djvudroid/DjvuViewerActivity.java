@@ -79,12 +79,17 @@ public class DjvuViewerActivity extends Activity
     protected void onStop()
     {
         super.onStop();
+        saveCurrentPage();
+    }
+
+    private void saveCurrentPage()
+    {
         final SharedPreferences sharedPreferences = getSharedPreferences(DOCUMENT_VIEW_STATE_PREFERENCES, 0);
         final SharedPreferences.Editor editor = sharedPreferences.edit();
         editor.putInt(getIntent().getData().toString(), documentView.getCurrentPage());
         editor.commit();
     }
-    
+
     @Override
     public boolean onCreateOptionsMenu(Menu menu)
     {
@@ -99,6 +104,7 @@ public class DjvuViewerActivity extends Activity
         switch (item.getItemId())
         {
             case MENU_EXIT:
+                saveCurrentPage();
                 System.exit(0);
                 return true;
             case MENU_GOTO:
