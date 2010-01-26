@@ -8,13 +8,15 @@ public class ZoomModel extends EventDispatcher
 {
     private float zoom = 1.0f;
     private static final float INCREMENT_DELTA = 0.05f;
+    private boolean horizontalScrollEnabled;
 
     public void setZoom(float zoom)
     {
         if (this.zoom != zoom)
         {
+            float oldZoom = this.zoom;
             this.zoom = zoom;
-            dispatch(new ZoomChangedEvent(zoom));
+            dispatch(new ZoomChangedEvent(zoom, oldZoom));
         }
     }
 
@@ -36,5 +38,15 @@ public class ZoomModel extends EventDispatcher
     public void bringUpZoomControls()
     {
         dispatch(new BringUpZoomControlsEvent());
+    }
+
+    public void setHorizontalScrollEnabled(boolean horizontalScrollEnabled)
+    {
+        this.horizontalScrollEnabled = horizontalScrollEnabled;
+    }
+
+    public boolean isHorizontalScrollEnabled()
+    {
+        return horizontalScrollEnabled;
     }
 }

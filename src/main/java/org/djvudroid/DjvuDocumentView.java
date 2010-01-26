@@ -4,6 +4,7 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.*;
@@ -24,6 +25,7 @@ public class DjvuDocumentView extends ScrollView implements ZoomListener
     private final Set<Integer> decodingPageNums = new HashSet<Integer>();
     private boolean isInitialized = false;
     private int pageToGoTo;
+    private float lastX;
 
     public DjvuDocumentView(Context context, ZoomModel zoomModel)
     {
@@ -297,9 +299,56 @@ public class DjvuDocumentView extends ScrollView implements ZoomListener
         return 0;
     }
 
-    public void zoomChanged(float newZoom)
+    public void zoomChanged(float newZoom, float oldZoom)
     {
         stopDecodingAllPages();
         startDecodingVisiblePages(true);
+        final float ratio = newZoom / oldZoom;
+        final int halfWidth = getWidth() / 2;
+        scrollTo((int)(ratio * (getScrollX() + halfWidth) - halfWidth), getScrollY());
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent ev)
+    {
+        final boolean b = super.onTouchEvent(ev);
+        if (!zoomModel.isHorizontalScrollEnabled())
+        {
+            return b;
+        }
+
+        switch (ev.getAction())
+        {
+            case MotionEvent.ACTION_DOWN:
+                lastX = ev.getX();
+                break;
+            case MotionEvent.ACTION_MOVE:
+                final int delta = (int) (lastX - ev.getX());
+                scrollBy(delta, 0);
+                lastX = ev.getX();
+                break;
+        }
+        return true;
+    }
+
+    @Override
+    public void computeScroll()
+    {
+        // save scrollX as it killed by scroller inside ScrollView.computeScroll()
+        final int scrollX = getScrollX();
+        super.computeScroll();
+        scrollTo(scrollX, getScrollY());
+    }
+
+    @Override
+    protected void measureChild(View child, int parentWidthMeasureSpec, int parentHeightMeasureSpec)
+    {
+        super.measureChild(child, MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED), parentHeightMeasureSpec);
+    }
+
+    @Override
+    protected void measureChildWithMargins(View child, int parentWidthMeasureSpec, int widthUsed, int parentHeightMeasureSpec, int heightUsed)
+    {
+        super.measureChildWithMargins(child, MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED), widthUsed, parentHeightMeasureSpec, heightUsed);    
     }
 }

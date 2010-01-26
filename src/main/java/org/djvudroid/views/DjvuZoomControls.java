@@ -3,6 +3,8 @@ package org.djvudroid.views;
 import android.content.Context;
 import android.view.MotionEvent;
 import android.view.View;
+import android.widget.CompoundButton;
+import android.widget.ToggleButton;
 import android.widget.ZoomControls;
 import org.djvudroid.events.BringUpZoomControlsListener;
 import org.djvudroid.models.ZoomModel;
@@ -28,6 +30,19 @@ public class DjvuZoomControls extends ZoomControls implements BringUpZoomControl
                 zoomModel.decreaseZoom();
             }
         });
+        final ToggleButton button = new ToggleButton(context);
+        button.setTextOn("Scroll On");
+        final String s = "Scroll Off";
+        button.setTextOff(s);
+        button.setText(s);
+        button.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener()
+        {
+            public void onCheckedChanged(CompoundButton compoundButton, boolean b)
+            {
+                zoomModel.setHorizontalScrollEnabled(b);
+            }
+        });
+        addView(button, 0);
     }
 
     @Override
