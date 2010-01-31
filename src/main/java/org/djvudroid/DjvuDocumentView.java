@@ -3,10 +3,7 @@ package org.djvudroid;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
-import android.view.Gravity;
-import android.view.MotionEvent;
-import android.view.View;
-import android.view.ViewGroup;
+import android.view.*;
 import android.widget.*;
 import org.djvudroid.events.ZoomListener;
 import org.djvudroid.models.ZoomModel;
@@ -26,6 +23,8 @@ public class DjvuDocumentView extends ScrollView implements ZoomListener
     private boolean isInitialized = false;
     private int pageToGoTo;
     private float lastX;
+    private VelocityTracker velocityTracker;
+    private final Scroller scroller;
 
     public DjvuDocumentView(Context context, ZoomModel zoomModel)
     {
@@ -33,6 +32,7 @@ public class DjvuDocumentView extends ScrollView implements ZoomListener
         this.zoomModel = zoomModel;
         initLayout();
         setKeepScreenOn(true);
+        scroller = new Scroller(getContext());
     }
 
     public void setDecodeService(DecodeService decodeService)
@@ -103,7 +103,6 @@ public class DjvuDocumentView extends ScrollView implements ZoomListener
         stopDecodingInvisiblePages();
         removeImageFromInvisiblePages();
         startDecodingVisiblePages();
-        zoomModel.bringUpZoomControls();
     }
 
     private void startDecodingVisiblePages()
@@ -155,7 +154,7 @@ public class DjvuDocumentView extends ScrollView implements ZoomListener
         for (Integer decodingPageNum : new HashSet<Integer>(decodingPageNums))
         {
             stopDecodingPage(decodingPageNum);
-        }    
+        }
     }
 
     private void stopDecodingPage(Integer decodingPageNum)
@@ -256,7 +255,7 @@ public class DjvuDocumentView extends ScrollView implements ZoomListener
     private TextView createPageNumView(int i)
     {
         TextView pageNumTextView = new TextView(getContext());
-        pageNumTextView.setText("Page " + (i+1));
+        pageNumTextView.setText("Page " + (i + 1));
         pageNumTextView.setTextSize(32);
         pageNumTextView.setGravity(Gravity.CENTER_VERTICAL | Gravity.CENTER_HORIZONTAL);
         pageNumTextView.setLayoutParams(new LayoutParams(ViewGroup.LayoutParams.FILL_PARENT, ViewGroup.LayoutParams.FILL_PARENT));
@@ -305,27 +304,45 @@ public class DjvuDocumentView extends ScrollView implements ZoomListener
         startDecodingVisiblePages(true);
         final float ratio = newZoom / oldZoom;
         final int halfWidth = getWidth() / 2;
-        scrollTo((int)(ratio * (getScrollX() + halfWidth) - halfWidth), getScrollY());
+        scrollTo((int) (ratio * (getScrollX() + halfWidth) - halfWidth), getScrollY());
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent ev)
     {
+        zoomModel.bringUpZoomControls();
+
         final boolean b = super.onTouchEvent(ev);
         if (!zoomModel.isHorizontalScrollEnabled())
         {
             return b;
         }
 
+        if (velocityTracker == null)
+        {
+            velocityTracker = VelocityTracker.obtain();
+        }
+        velocityTracker.addMovement(ev);
+
         switch (ev.getAction())
         {
             case MotionEvent.ACTION_DOWN:
+                if (!scroller.isFinished())
+                {
+                    scroller.abortAnimation();
+                }
                 lastX = ev.getX();
                 break;
             case MotionEvent.ACTION_MOVE:
                 final int delta = (int) (lastX - ev.getX());
                 scrollBy(delta, 0);
                 lastX = ev.getX();
+                break;
+            case MotionEvent.ACTION_UP:
+                velocityTracker.computeCurrentVelocity(1000);
+                scroller.fling(getScrollX(), 0, (int) -velocityTracker.getXVelocity(), 0, 0, getMainLayout().getWidth(), 0, 0);
+                velocityTracker.recycle();
+                velocityTracker = null;
                 break;
         }
         return true;
@@ -337,7 +354,14 @@ public class DjvuDocumentView extends ScrollView implements ZoomListener
         // save scrollX as it killed by scroller inside ScrollView.computeScroll()
         final int scrollX = getScrollX();
         super.computeScroll();
-        scrollTo(scrollX, getScrollY());
+        if (scroller.computeScrollOffset())
+        {
+            scrollTo(scroller.getCurrX(), getScrollY());
+        }
+        else
+        {
+            scrollTo(scrollX, getScrollY());
+        }
     }
 
     @Override
@@ -349,6 +373,6 @@ public class DjvuDocumentView extends ScrollView implements ZoomListener
     @Override
     protected void measureChildWithMargins(View child, int parentWidthMeasureSpec, int widthUsed, int parentHeightMeasureSpec, int heightUsed)
     {
-        super.measureChildWithMargins(child, MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED), widthUsed, parentHeightMeasureSpec, heightUsed);    
+        super.measureChildWithMargins(child, MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED), widthUsed, parentHeightMeasureSpec, heightUsed);
     }
 }
