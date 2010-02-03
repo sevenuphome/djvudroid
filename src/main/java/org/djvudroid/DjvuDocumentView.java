@@ -4,6 +4,8 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.view.*;
+import android.view.animation.Animation;
+import android.view.animation.ScaleAnimation;
 import android.widget.*;
 import org.djvudroid.events.ZoomListener;
 import org.djvudroid.models.ZoomModel;
@@ -25,6 +27,8 @@ public class DjvuDocumentView extends ScrollView implements ZoomListener
     private float lastX;
     private VelocityTracker velocityTracker;
     private final Scroller scroller;
+    private final HashMap<Integer, Float> pageIndexToAspectRatio = new HashMap<Integer, Float>();
+    private Animation.AnimationListener animationListener;
 
     public DjvuDocumentView(Context context, ZoomModel zoomModel)
     {
@@ -65,9 +69,15 @@ public class DjvuDocumentView extends ScrollView implements ZoomListener
         }
         final FrameLayout frameLayout = new FrameLayout(getContext());
         frameLayout.setLayoutParams(new LayoutParams(width, height));
+        setAspectRatio(width, height, pageIndex);
         frameLayout.addView(createPageNumView(pageIndex));
         pages.put(pageIndex, frameLayout);
         mainLayout.addView(frameLayout);
+    }
+
+    private void setAspectRatio(int width, int height, int pageIndex)
+    {
+        pageIndexToAspectRatio.put(pageIndex, width * 1.0f / height);
     }
 
     private LinearLayout getMainLayout()
@@ -79,7 +89,7 @@ public class DjvuDocumentView extends ScrollView implements ZoomListener
     {
         final LinearLayout linearLayout = new LinearLayout(getContext());
         linearLayout.setOrientation(LinearLayout.VERTICAL);
-        linearLayout.setGravity(Gravity.CENTER_HORIZONTAL);
+//        linearLayout.setGravity(Gravity.CENTER_HORIZONTAL);
         linearLayout.setTag(LinearLayout.class);
         addView(linearLayout);
         return linearLayout;
@@ -100,6 +110,18 @@ public class DjvuDocumentView extends ScrollView implements ZoomListener
     protected void onScrollChanged(int l, int t, int oldl, int oldt)
     {
         super.onScrollChanged(l, t, oldl, oldt);
+        // on scrollChanged can be called from scrollTo just after new layout applied so we should wait for relayout
+        post(new Runnable()
+        {
+            public void run()
+            {
+                updatePageVisibility();
+            }
+        });
+    }
+
+    private void updatePageVisibility()
+    {
         stopDecodingInvisiblePages();
         removeImageFromInvisiblePages();
         startDecodingVisiblePages();
@@ -188,7 +210,7 @@ public class DjvuDocumentView extends ScrollView implements ZoomListener
 
     private void setDecodingStatus(Integer pageNum)
     {
-        if (!decodingPageNums.contains(pageNum) && pages.containsKey(pageNum))
+        if (!decodingPageNums.contains(pageNum) && pages.containsKey(pageNum) && !visiblePageNumToBitmap.containsKey(pageNum))
         {
             final ProgressBar bar = new ProgressBar(getContext());
             bar.setIndeterminate(true);
@@ -214,21 +236,41 @@ public class DjvuDocumentView extends ScrollView implements ZoomListener
         return page.getGlobalVisibleRect(new Rect());
     }
 
-    private void submitBitmap(Integer pageNum, Bitmap bitmap)
+    private void submitBitmap(final Integer pageNum, final Bitmap bitmap)
     {
-        removeImageFromPage(pageNum);
         addImageToPage(pageNum, bitmap);
         removeDecodingStatus(pageNum);
     }
 
-    private void addImageToPage(Integer pageNum, Bitmap bitmap)
+    private void addImageToPage(Integer pageNum, final Bitmap bitmap)
     {
         init();
-        final ImageView imageView = createImageView(bitmap);
         final FrameLayout page = pages.get(pageNum);
-        page.addView(imageView);
-        page.setLayoutParams(new LinearLayout.LayoutParams(bitmap.getWidth(), bitmap.getHeight()));
-        visiblePageNumToBitmap.put(pageNum, bitmap);
+        ImageView imageView = (ImageView) page.findViewWithTag(ImageView.class);
+        if (imageView == null)
+        {
+            imageView = createImageView(bitmap);
+            page.addView(imageView);
+        }
+        else
+        {
+            imageView.setImageBitmap(bitmap);
+        }
+        setPageSize(pageNum, bitmap);
+        final Bitmap oldBitmap = visiblePageNumToBitmap.put(pageNum, bitmap);
+        if (oldBitmap != null)
+        {
+            oldBitmap.recycle();
+        }
+    }
+
+    private void setPageSize(Integer pageNum, Bitmap bitmap)
+    {
+        setAspectRatio(bitmap.getWidth(), bitmap.getHeight(), pageNum);
+        if (getMainLayout().getAnimation() == null)
+        {
+            setPageSizeByAspectRatio(getWidth(), pages.get(pageNum), pageNum, zoomModel.getZoom());
+        }
     }
 
     private void removeImageFromPage(Integer fromPage)
@@ -249,6 +291,8 @@ public class DjvuDocumentView extends ScrollView implements ZoomListener
         final ImageView imageView = new ImageView(getContext());
         imageView.setImageBitmap(bitmap);
         imageView.setTag(ImageView.class);
+        imageView.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.FILL_PARENT, ViewGroup.LayoutParams.FILL_PARENT));
+        imageView.setScaleType(ImageView.ScaleType.FIT_XY);
         return imageView;
     }
 
@@ -302,9 +346,68 @@ public class DjvuDocumentView extends ScrollView implements ZoomListener
     {
         stopDecodingAllPages();
         startDecodingVisiblePages(true);
+        applyScaleAnimation(newZoom, oldZoom);
+    }
+
+    private void applyScaleAnimation(final float newZoom, final float oldZoom)
+    {
+        if (getMainLayout().getAnimation() != null)
+        {
+            animationListener.onAnimationEnd(getAnimation());
+        }
         final float ratio = newZoom / oldZoom;
-        final int halfWidth = getWidth() / 2;
-        scrollTo((int) (ratio * (getScrollX() + halfWidth) - halfWidth), getScrollY());
+        final ScaleAnimation animation = new ScaleAnimation(1.0f, ratio, 1.0f, ratio, getScrollX() + getWidth()/2, getScrollY() + getHeight()/2);
+
+        animation.setDuration(150);
+        animation.setFillAfter(true);
+        animationListener = new Animation.AnimationListener()
+        {
+            public void onAnimationEnd(Animation animation)
+            {
+                removeAnimation();
+                final int width = getWidth();
+                for (Map.Entry<Integer, FrameLayout> pageIndexToPage : pages.entrySet())
+                {
+                    final FrameLayout page = pageIndexToPage.getValue();
+                    final Integer pageIndex = pageIndexToPage.getKey();
+                    setPageSizeByAspectRatio(width, page, pageIndex, newZoom);
+                }
+                updateScrollWhileZoom(newZoom, oldZoom);
+            }
+
+            public void onAnimationStart(Animation animation)
+            {
+            }
+
+            public void onAnimationRepeat(Animation animation)
+            {
+            }
+        };
+        animation.setAnimationListener(animationListener);
+        getMainLayout().startAnimation(animation);
+    }
+
+    private void setPageSizeByAspectRatio(int mainWidth, FrameLayout page, Integer pageIndex, float zoom)
+    {
+        page.setLayoutParams(new LinearLayout.LayoutParams(
+                Math.round(mainWidth * zoom),
+                Math.round(mainWidth / pageIndexToAspectRatio.get(pageIndex) * zoom)
+        ));
+    }
+
+    private void removeAnimation()
+    {
+        animationListener = null;
+        getMainLayout().clearAnimation();
+    }
+
+    private void updateScrollWhileZoom(float newZoom, float oldZoom)
+    {
+        final float ratio = newZoom / oldZoom;
+        final float halfWidth = getWidth() / 2.0f;
+        final float halfHeight = getHeight() / 2.0f;
+        scrollTo(Math.round(ratio * (getScrollX() + halfWidth) - halfWidth),
+                Math.round(ratio * (getScrollY() + halfHeight) - halfHeight));
     }
 
     @Override
