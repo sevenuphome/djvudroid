@@ -7,11 +7,14 @@ import android.widget.CompoundButton;
 import android.widget.ToggleButton;
 import android.widget.ZoomControls;
 import org.djvudroid.events.BringUpZoomControlsListener;
+import org.djvudroid.events.ZoomListener;
 import org.djvudroid.models.ZoomModel;
 
-public class DjvuZoomControls extends ZoomControls implements BringUpZoomControlsListener
+public class DjvuZoomControls extends ZoomControls implements BringUpZoomControlsListener, ZoomListener
 {
     private int atomicShowCounter = 0;
+    private final ZoomModel zoomModel;
+
     public DjvuZoomControls(Context context, final ZoomModel zoomModel)
     {
         super(context);
@@ -43,6 +46,8 @@ public class DjvuZoomControls extends ZoomControls implements BringUpZoomControl
             }
         });
         addView(button, 0);
+        this.zoomModel = zoomModel;
+        setZoomEnabled();
     }
 
     @Override
@@ -82,5 +87,15 @@ public class DjvuZoomControls extends ZoomControls implements BringUpZoomControl
                 atomicShowCounter = 0;
             }
         }, 2000);
+    }
+
+    public void zoomChanged(float newZoom, float oldZoom)
+    {
+        setZoomEnabled();
+    }
+
+    private void setZoomEnabled()
+    {
+        setIsZoomOutEnabled(zoomModel.canDecrement());
     }
 }

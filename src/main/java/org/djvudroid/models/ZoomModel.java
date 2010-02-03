@@ -12,6 +12,7 @@ public class ZoomModel extends EventDispatcher
 
     public void setZoom(float zoom)
     {
+        zoom = Math.max(zoom, 1.0f);
         if (this.zoom != zoom)
         {
             float oldZoom = this.zoom;
@@ -48,5 +49,10 @@ public class ZoomModel extends EventDispatcher
     public boolean isHorizontalScrollEnabled()
     {
         return horizontalScrollEnabled;
+    }
+
+    public boolean canDecrement()
+    {
+        return zoom > 1.0f;
     }
 }
