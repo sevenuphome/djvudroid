@@ -269,8 +269,13 @@ public class DjvuDocumentView extends ScrollView implements ZoomListener
         setAspectRatio(bitmap.getWidth(), bitmap.getHeight(), pageNum);
         if (getMainLayout().getAnimation() == null)
         {
-            setPageSizeByAspectRatio(getWidth(), pages.get(pageNum), pageNum, zoomModel.getZoom());
+            setPageSizeByAspectRatio(pageNum);
         }
+    }
+
+    private void setPageSizeByAspectRatio(Integer pageNum)
+    {
+        setPageSizeByAspectRatio(getWidth(), pages.get(pageNum), pageNum, zoomModel.getZoom(), null, 0);
     }
 
     private void removeImageFromPage(Integer fromPage)
@@ -366,13 +371,15 @@ public class DjvuDocumentView extends ScrollView implements ZoomListener
             {
                 removeAnimation();
                 final int width = getWidth();
+                final int currentPage = getCurrentPage();
+                HeightAccum heightAccum = new HeightAccum();
                 for (Map.Entry<Integer, FrameLayout> pageIndexToPage : pages.entrySet())
                 {
                     final FrameLayout page = pageIndexToPage.getValue();
                     final Integer pageIndex = pageIndexToPage.getKey();
-                    setPageSizeByAspectRatio(width, page, pageIndex, newZoom);
+                    setPageSizeByAspectRatio(width, page, pageIndex, newZoom, heightAccum, currentPage);
                 }
-                updateScrollWhileZoom(newZoom, oldZoom);
+                lastUpdateScrollByZoom = new UpdateScrollByZoom(newZoom, oldZoom, heightAccum, getScrollY());
             }
 
             public void onAnimationStart(Animation animation)
@@ -387,12 +394,43 @@ public class DjvuDocumentView extends ScrollView implements ZoomListener
         getMainLayout().startAnimation(animation);
     }
 
-    private void setPageSizeByAspectRatio(int mainWidth, FrameLayout page, Integer pageIndex, float zoom)
+    private class HeightAccum
     {
+        private int currentPageHeight;
+        private int newPageHeight;
+    }
+
+    private class UpdateScrollByZoom
+    {
+        private final float newZoom;
+        private final float oldZoom;
+        private final HeightAccum heightAccum;
+        private final float currentScrollY;
+
+        private UpdateScrollByZoom(float newZoom, float oldZoom, HeightAccum heightAccum, float currentScrollY)
+        {
+            this.newZoom = newZoom;
+            this.oldZoom = oldZoom;
+            this.heightAccum = heightAccum;
+            this.currentScrollY = currentScrollY;
+        }
+    }
+
+    private UpdateScrollByZoom lastUpdateScrollByZoom;
+
+    private void setPageSizeByAspectRatio(int mainWidth, FrameLayout page, Integer pageIndex, float zoom, HeightAccum heightAccum, int currentPage)
+    {
+        final int newHeight = Math.round(mainWidth / pageIndexToAspectRatio.get(pageIndex) * zoom);
+        final int height = page.getHeight();
         page.setLayoutParams(new LinearLayout.LayoutParams(
                 Math.round(mainWidth * zoom),
-                Math.round(mainWidth / pageIndexToAspectRatio.get(pageIndex) * zoom)
+                newHeight
         ));
+        if (heightAccum != null && currentPage > pageIndex)
+        {
+            heightAccum.currentPageHeight += height;
+            heightAccum.newPageHeight += newHeight;
+        }
     }
 
     private void removeAnimation()
@@ -401,13 +439,13 @@ public class DjvuDocumentView extends ScrollView implements ZoomListener
         getMainLayout().clearAnimation();
     }
 
-    private void updateScrollWhileZoom(float newZoom, float oldZoom)
-    {
+    private void updateScrollWhileZoom(float newZoom, float oldZoom, HeightAccum heightAccum, float currentScrollY)
+    {                                       
         final float ratio = newZoom / oldZoom;
         final float halfWidth = getWidth() / 2.0f;
         final float halfHeight = getHeight() / 2.0f;
         scrollTo(Math.round(ratio * (getScrollX() + halfWidth) - halfWidth),
-                Math.round(ratio * (getScrollY() + halfHeight) - halfHeight));
+                Math.round(ratio * (currentScrollY + halfHeight - heightAccum.currentPageHeight) - halfHeight + heightAccum.newPageHeight));
     }
 
     @Override
@@ -464,6 +502,11 @@ public class DjvuDocumentView extends ScrollView implements ZoomListener
         else
         {
             scrollTo(scrollX, getScrollY());
+        }
+        if (lastUpdateScrollByZoom != null)
+        {
+            updateScrollWhileZoom(lastUpdateScrollByZoom.newZoom, lastUpdateScrollByZoom.oldZoom, lastUpdateScrollByZoom.heightAccum, lastUpdateScrollByZoom.currentScrollY);
+            lastUpdateScrollByZoom = null;
         }
     }
 
