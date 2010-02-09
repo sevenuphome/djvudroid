@@ -29,6 +29,8 @@ public class DjvuDocumentView extends ScrollView implements ZoomListener
     private final Scroller scroller;
     private final HashMap<Integer, Float> pageIndexToAspectRatio = new HashMap<Integer, Float>();
     private Animation.AnimationListener animationListener;
+    private final Rect tempRect = new Rect();
+    private final HashMap<Integer,Bitmap> pendingBitmaps = new HashMap<Integer, Bitmap>();
 
     public DjvuDocumentView(Context context, ZoomModel zoomModel)
     {
@@ -89,8 +91,8 @@ public class DjvuDocumentView extends ScrollView implements ZoomListener
     {
         final LinearLayout linearLayout = new LinearLayout(getContext());
         linearLayout.setOrientation(LinearLayout.VERTICAL);
-//        linearLayout.setGravity(Gravity.CENTER_HORIZONTAL);
         linearLayout.setTag(LinearLayout.class);
+        linearLayout.setAnimationCacheEnabled(false);
         addView(linearLayout);
         return linearLayout;
     }
@@ -233,13 +235,36 @@ public class DjvuDocumentView extends ScrollView implements ZoomListener
 
     private boolean isPageVisible(FrameLayout page)
     {
-        return page.getGlobalVisibleRect(new Rect());
+        return page.getGlobalVisibleRect(tempRect);
     }
 
     private void submitBitmap(final Integer pageNum, final Bitmap bitmap)
     {
+        if (isAnimationRunning())
+        {
+            final Bitmap oldBitmap = pendingBitmaps.put(pageNum, bitmap);
+            if (oldBitmap != null)
+            {
+                oldBitmap.recycle();
+            }
+            return;
+        }
         addImageToPage(pageNum, bitmap);
         removeDecodingStatus(pageNum);
+    }
+
+    private void submitPendingBitmaps()
+    {
+        for (Map.Entry<Integer, Bitmap> pageBitmapEntry : pendingBitmaps.entrySet())
+        {
+            submitBitmap(pageBitmapEntry.getKey(), pageBitmapEntry.getValue());
+        }
+        pendingBitmaps.clear();
+    }
+
+    private boolean isAnimationRunning()
+    {
+        return getMainLayout().getAnimation() != null;
     }
 
     private void addImageToPage(Integer pageNum, final Bitmap bitmap)
@@ -356,7 +381,7 @@ public class DjvuDocumentView extends ScrollView implements ZoomListener
 
     private void applyScaleAnimation(final float newZoom, final float oldZoom)
     {
-        if (getMainLayout().getAnimation() != null)
+        if (isAnimationRunning())
         {
             animationListener.onAnimationEnd(getAnimation());
         }
@@ -370,6 +395,7 @@ public class DjvuDocumentView extends ScrollView implements ZoomListener
             public void onAnimationEnd(Animation animation)
             {
                 removeAnimation();
+                submitPendingBitmaps();
                 final int width = getWidth();
                 final int currentPage = getCurrentPage();
                 HeightAccum heightAccum = new HeightAccum();
