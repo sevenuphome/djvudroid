@@ -2,6 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
           package="org.djvudroid" android:versionCode="8" android:versionName="2.3">
     <uses-sdk android:minSdkVersion="3"/>
+    <uses-permission android:name="android.permission.READ_OWNER_DATA"/>
     <application android:icon="@drawable/icon" android:label="DjvuDroid" android:debuggable="true">
         <activity android:name=".DjvuViewerActivity">
             <intent-filter>
@@ -11,7 +12,7 @@
                 <data android:mimeType="image/djvu" />
             </intent-filter>
         </activity>
-        <activity android:name=".HowToUseActivity" android:label="How To DjvuDroid">
+        <activity android:name=".DjvuBrowserActivity" android:label="DjvuDroid">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
