@@ -1,7 +1,5 @@
 package org.djvudroid.codec;
 
-import android.net.Uri;
-
 import java.util.HashMap;
 import java.util.concurrent.Semaphore;
 
@@ -19,9 +17,9 @@ public class DjvuDocument
         this.waitObject = waitObject;
     }
 
-    static DjvuDocument openDocument(Uri uri, DjvuContext djvuContext, Semaphore pagesSemaphore, Object waitObject)
+    static DjvuDocument openDocument(String uriHash, DjvuContext djvuContext, Semaphore pagesSemaphore, Object waitObject)
     {
-        return new DjvuDocument(open(djvuContext.getContextHandle(), uri.toString()), pagesSemaphore, waitObject);
+        return new DjvuDocument(open(djvuContext.getContextHandle(), uriHash), pagesSemaphore, waitObject);
     }
 
     private native static long open(long contextHandle, String uri);

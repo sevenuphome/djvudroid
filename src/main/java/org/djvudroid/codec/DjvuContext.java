@@ -3,6 +3,7 @@ package org.djvudroid.codec;
 import android.content.ContentResolver;
 import android.net.Uri;
 import android.util.Log;
+import org.djvudroid.utils.MD5StringUtil;
 
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -22,6 +23,7 @@ public class DjvuContext implements Runnable
     private static final String DJVU_DROID_CODEC_LIBRARY = "DjvuDroidCodecLibrary";
     private final HashMap<String, Semaphore> urlToSemaphore = new HashMap<String, Semaphore>();
     private final Object waitObject = new Object();
+    private final HashMap<String, Uri> hashToUri = new HashMap<String, Uri>();
 
     public DjvuContext()
     {
@@ -32,8 +34,10 @@ public class DjvuContext implements Runnable
     public DjvuDocument openDocument(Uri uri)
     {
         final Semaphore semaphore = new Semaphore(0);
-        urlToSemaphore.put(uri.toString(), semaphore);
-        return DjvuDocument.openDocument(uri, this, semaphore, waitObject);
+        final String uriHash = "hash://" + MD5StringUtil.md5StringFor(uri.toString());
+        hashToUri.put(uriHash, uri);
+        urlToSemaphore.put(uriHash, semaphore);
+        return DjvuDocument.openDocument(uriHash, this, semaphore, waitObject);
     }
 
     long getContextHandle()
@@ -62,19 +66,20 @@ public class DjvuContext implements Runnable
 
     /**
      * Called from JNI
-     * @param uri uri to load from
+     * @param uriHash uriHash to load from
      * @param streamId inner stream id
      * @param docHandle document handle to submit data to
      */
     @SuppressWarnings({"UnusedDeclaration"})
-    private void handleNewStream(final String uri, final int streamId, final long docHandle)
+    private void handleNewStream(final String uriHash, final int streamId, final long docHandle)
     {
-        Log.d(DJVU_DROID_CODEC_LIBRARY, "Starting data submit for: " + uri);
+        final Uri uri = hashToUri.get(uriHash);
+        Log.d(DJVU_DROID_CODEC_LIBRARY, "Starting data submit for: " + uriHash + "@" + uri);
         InputStream inputStream = null;
         try
         {
             final ByteBuffer buffer = ByteBuffer.allocateDirect(BUFFER_SIZE);
-            inputStream = contentResolver.openInputStream(Uri.parse(uri));
+            inputStream = contentResolver.openInputStream(uri);
             if (inputStream instanceof FileInputStream)
             {
                 fileStreamWrite(streamId, docHandle, buffer, (FileInputStream) inputStream);
@@ -107,8 +112,8 @@ public class DjvuContext implements Runnable
                 }
             }
         }
-        Log.d(DJVU_DROID_CODEC_LIBRARY, "Data submit finished for: " + uri);
-        urlToSemaphore.remove(uri).release();
+        Log.d(DJVU_DROID_CODEC_LIBRARY, "Data submit finished for: " + uriHash + "@" + uri);
+        urlToSemaphore.remove(uriHash).release();
     }
 
     private void fileStreamWrite(int streamId, long docHandle, ByteBuffer buffer, FileInputStream fileInputStream)
