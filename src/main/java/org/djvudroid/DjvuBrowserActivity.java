@@ -6,16 +6,15 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
 import android.widget.ListView;
+import org.djvudroid.presentation.BrowserAdapter;
 
 import java.io.File;
-import java.io.FileFilter;
 
 public class DjvuBrowserActivity extends Activity
 {
-    private File currentDirectory;
-    private ArrayAdapter<String> adapter;
+    private BrowserAdapter adapter;
+    private static final String CURRENT_DIRECTORY = "currentDirectory";
 
     @Override
     public void onCreate(Bundle savedInstanceState)
@@ -23,19 +22,33 @@ public class DjvuBrowserActivity extends Activity
         super.onCreate(savedInstanceState);
         setContentView(R.layout.browser);
         initListView();
-        setCurrentDir(new File("/"));
+    }
+
+    @Override
+    protected void onPostCreate(Bundle savedInstanceState)
+    {
+        super.onPostCreate(savedInstanceState);
+        setCurrentDir(new File("/sdcard"));
+        if (savedInstanceState != null)
+        {
+            final String absolutePath = savedInstanceState.getString(CURRENT_DIRECTORY);
+            if (absolutePath != null)
+            {
+                setCurrentDir(new File(absolutePath));
+            }
+        }
     }
 
     private void initListView()
     {
         final ListView listView = (ListView) findViewById(R.id.browserList);
-        adapter = new ArrayAdapter<String>(this, R.layout.browsertextview, R.id.browserTextView);
+        adapter = new BrowserAdapter(this);
         listView.setAdapter(adapter);
         listView.setOnItemClickListener(new AdapterView.OnItemClickListener()
         {
             public void onItemClick(AdapterView<?> adapterView, View view, int i, long l)
             {
-                final File file = new File(currentDirectory, adapter.getItem(i));
+                final File file = adapter.getItem(i);
                 if (file.isDirectory())
                 {
                     setCurrentDir(file);
@@ -57,22 +70,16 @@ public class DjvuBrowserActivity extends Activity
 
     private void setCurrentDir(File newDir)
     {
-        final File[] files = newDir.listFiles(new FileFilter()
-        {
-            public boolean accept(File pathname)
-            {
-                return pathname.isDirectory() || pathname.getName().endsWith(".djvu") || pathname.getName().endsWith(".djv");
-            }
-        });
-        adapter.clear();
-        if (newDir.getParent() != null)
-        {
-            adapter.add("..");
-        }
-        for (File file : files)
-        {
-            adapter.add(file.getName());
-        }
-        currentDirectory = newDir;
+        adapter.setCurrentDirectory(newDir);
+        getWindow().setTitle(newDir.getAbsolutePath());
     }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState)
+    {
+        super.onSaveInstanceState(outState);
+        outState.putString(CURRENT_DIRECTORY, adapter.getCurrentDirectory().getAbsolutePath());
+    }
+
+
 }
