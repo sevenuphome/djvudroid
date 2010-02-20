@@ -14,6 +14,7 @@ public class DjvuViewerActivity extends Activity
 {
     private static final int MENU_EXIT = 0;
     private static final int MENU_GOTO = 1;
+    private static final int MENU_FULL_SCREEN = 2;    
 
     private static final int DIALOG_GOTO = 0;
 
@@ -22,6 +23,7 @@ public class DjvuViewerActivity extends Activity
 
     //Reuse decodeService in process cause it holds decode caches
     private DjvuDocumentView documentView;
+    private ViewerPreferences viewerPreferences;
 
     /**
      * Called when the activity is first created.
@@ -41,14 +43,26 @@ public class DjvuViewerActivity extends Activity
         documentView.setDecodeService(decodeService);
         decodeService.open(getIntent().getData());
 
+        viewerPreferences = new ViewerPreferences(this);
+
         final FrameLayout frameLayout = createMainContainer();
         frameLayout.addView(documentView);
         frameLayout.addView(createZoomControls(zoomModel));
+        setFullScreen();
         setContentView(frameLayout);
 
         final SharedPreferences sharedPreferences = getSharedPreferences(DOCUMENT_VIEW_STATE_PREFERENCES, 0);
         documentView.goToPage(sharedPreferences.getInt(getIntent().getData().toString(), 0));
         documentView.showDocument();
+    }
+
+    private void setFullScreen()
+    {
+        if (viewerPreferences.isFullScreen())
+        {
+            getWindow().requestFeature(Window.FEATURE_NO_TITLE);
+            getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        }
     }
 
     private DjvuZoomControls createZoomControls(ZoomModel zoomModel)
@@ -92,7 +106,14 @@ public class DjvuViewerActivity extends Activity
     {
         menu.add(0, MENU_EXIT, 0, "Exit");
         menu.add(0, MENU_GOTO, 0, "Go to page");
+        final MenuItem menuItem = menu.add(0, MENU_FULL_SCREEN, 0, "Full screen").setCheckable(true).setChecked(viewerPreferences.isFullScreen());
+        setFullScreenMenuItemText(menuItem);
         return true;
+    }
+
+    private void setFullScreenMenuItemText(MenuItem menuItem)
+    {
+        menuItem.setTitle("Full screen " + (menuItem.isChecked() ? "on" : "off"));
     }
 
     @Override
@@ -106,6 +127,14 @@ public class DjvuViewerActivity extends Activity
                 return true;
             case MENU_GOTO:
                 showDialog(DIALOG_GOTO);
+                return true;
+            case MENU_FULL_SCREEN:
+                item.setChecked(!item.isChecked());
+                setFullScreenMenuItemText(item);
+                viewerPreferences.setFullScreen(item.isChecked());
+                
+                finish();
+                startActivity(getIntent());
                 return true;
         }
         return false;
