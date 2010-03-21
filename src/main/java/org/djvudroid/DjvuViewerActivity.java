@@ -54,6 +54,8 @@ public class DjvuViewerActivity extends Activity
         final SharedPreferences sharedPreferences = getSharedPreferences(DOCUMENT_VIEW_STATE_PREFERENCES, 0);
         documentView.goToPage(sharedPreferences.getInt(getIntent().getData().toString(), 0));
         documentView.showDocument();
+
+        viewerPreferences.addRecent(getIntent().getData());
     }
 
     private void setFullScreen()

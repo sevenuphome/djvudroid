@@ -5,9 +5,13 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.AdapterView;
+import android.widget.FrameLayout;
 import android.widget.ListView;
+import android.widget.TabHost;
 import org.djvudroid.presentation.BrowserAdapter;
+import org.djvudroid.presentation.UriBrowserAdapter;
 
 import java.io.File;
 
@@ -15,13 +19,46 @@ public class DjvuBrowserActivity extends Activity
 {
     private BrowserAdapter adapter;
     private static final String CURRENT_DIRECTORY = "currentDirectory";
+    private final AdapterView.OnItemClickListener onItemClickListener = new AdapterView.OnItemClickListener()
+    {
+        @SuppressWarnings({"unchecked"})
+        public void onItemClick(AdapterView<?> adapterView, View view, int i, long l)
+        {
+            final File file = ((AdapterView<BrowserAdapter>)adapterView).getAdapter().getItem(i);
+            if (file.isDirectory())
+            {
+                setCurrentDir(file);
+            }
+            else
+            {
+                showDjvuDocument(file);
+            }
+        }
+    };
 
     @Override
     public void onCreate(Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.browser);
-        initListView();
+        final ListView browseList = initBrowserListView();
+        final ListView recentListView = initRecentListView();
+        TabHost tabHost = (TabHost) findViewById(R.id.browserTabHost);
+        tabHost.setup();
+        tabHost.addTab(tabHost.newTabSpec("Browse").setIndicator("Browse").setContent(new TabHost.TabContentFactory()
+        {
+            public View createTabContent(String s)
+            {
+                return browseList;
+            }
+        }));
+        tabHost.addTab(tabHost.newTabSpec("Recent").setIndicator("Recent").setContent(new TabHost.TabContentFactory()
+        {
+            public View createTabContent(String s)
+            {
+                return recentListView;
+            }
+        }));
     }
 
     @Override
@@ -39,31 +76,43 @@ public class DjvuBrowserActivity extends Activity
         }
     }
 
-    private void initListView()
+    private ListView initBrowserListView()
     {
-        final ListView listView = (ListView) findViewById(R.id.browserList);
+        final ListView listView = new ListView(this);
         adapter = new BrowserAdapter(this);
         listView.setAdapter(adapter);
+        listView.setOnItemClickListener(onItemClickListener);
+        listView.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.FILL_PARENT, ViewGroup.LayoutParams.FILL_PARENT));
+        return listView;
+    }
+
+    private ListView initRecentListView()
+    {
+        ListView listView = new ListView(this);
+        UriBrowserAdapter browserAdapter = new UriBrowserAdapter();
+        listView.setAdapter(browserAdapter);
         listView.setOnItemClickListener(new AdapterView.OnItemClickListener()
         {
+            @SuppressWarnings({"unchecked"})
             public void onItemClick(AdapterView<?> adapterView, View view, int i, long l)
             {
-                final File file = adapter.getItem(i);
-                if (file.isDirectory())
-                {
-                    setCurrentDir(file);
-                }
-                else
-                {
-                    showDjvuDocument(file);
-                }
+                showDjvuDocument(((AdapterView<UriBrowserAdapter>) adapterView).getAdapter().getItem(i));
             }
         });
+        ViewerPreferences viewerPreferences = new ViewerPreferences(this);
+        browserAdapter.setUris(viewerPreferences.getRecent());
+        listView.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.FILL_PARENT, ViewGroup.LayoutParams.FILL_PARENT));        
+        return listView;
     }
 
     private void showDjvuDocument(File file)
     {
-        final Intent intent = new Intent(Intent.ACTION_VIEW, Uri.fromFile(file));
+        showDjvuDocument(Uri.fromFile(file));
+    }
+
+    private void showDjvuDocument(Uri uri)
+    {
+        final Intent intent = new Intent(Intent.ACTION_VIEW, uri);
         intent.setClass(this, DjvuViewerActivity.class);
         startActivity(intent);
     }
@@ -80,6 +129,4 @@ public class DjvuBrowserActivity extends Activity
         super.onSaveInstanceState(outState);
         outState.putString(CURRENT_DIRECTORY, adapter.getCurrentDirectory().getAbsolutePath());
     }
-
-
 }

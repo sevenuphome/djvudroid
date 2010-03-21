@@ -68,7 +68,7 @@ public class BrowserAdapter extends BaseAdapter
     public void setCurrentDirectory(File currentDirectory)
     {
         this.currentDirectory = currentDirectory;
-        this.files = new ArrayList<File>(Arrays.asList(currentDirectory.listFiles(new FileFilter()
+        ArrayList<File> files = new ArrayList<File>(Arrays.asList(currentDirectory.listFiles(new FileFilter()
         {
             public boolean accept(File pathname)
             {
@@ -79,6 +79,12 @@ public class BrowserAdapter extends BaseAdapter
         {
             files.add(0, currentDirectory.getParentFile());
         }
+        setFiles(files);
+    }
+
+    public void setFiles(List<File> files)
+    {
+        this.files = files;
         notifyDataSetInvalidated();
     }
 
