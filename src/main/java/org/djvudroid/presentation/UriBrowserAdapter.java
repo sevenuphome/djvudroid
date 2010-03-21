@@ -45,5 +45,6 @@ public class UriBrowserAdapter extends BaseAdapter
     public void setUris(List<Uri> uris)
     {
         this.uris = uris;
+        notifyDataSetInvalidated();
     }
 }

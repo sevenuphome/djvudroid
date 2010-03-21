@@ -35,12 +35,15 @@ public class DjvuBrowserActivity extends Activity
             }
         }
     };
+    private UriBrowserAdapter recentAdapter;
+    private ViewerPreferences viewerPreferences;
 
     @Override
     public void onCreate(Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.browser);
+        viewerPreferences = new ViewerPreferences(this);        
         final ListView browseList = initBrowserListView();
         final ListView recentListView = initRecentListView();
         TabHost tabHost = (TabHost) findViewById(R.id.browserTabHost);
@@ -89,8 +92,8 @@ public class DjvuBrowserActivity extends Activity
     private ListView initRecentListView()
     {
         ListView listView = new ListView(this);
-        UriBrowserAdapter browserAdapter = new UriBrowserAdapter();
-        listView.setAdapter(browserAdapter);
+        recentAdapter = new UriBrowserAdapter();
+        listView.setAdapter(recentAdapter);
         listView.setOnItemClickListener(new AdapterView.OnItemClickListener()
         {
             @SuppressWarnings({"unchecked"})
@@ -99,9 +102,7 @@ public class DjvuBrowserActivity extends Activity
                 showDjvuDocument(((AdapterView<UriBrowserAdapter>) adapterView).getAdapter().getItem(i));
             }
         });
-        ViewerPreferences viewerPreferences = new ViewerPreferences(this);
-        browserAdapter.setUris(viewerPreferences.getRecent());
-        listView.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.FILL_PARENT, ViewGroup.LayoutParams.FILL_PARENT));        
+        listView.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.FILL_PARENT, ViewGroup.LayoutParams.FILL_PARENT));
         return listView;
     }
 
@@ -128,5 +129,12 @@ public class DjvuBrowserActivity extends Activity
     {
         super.onSaveInstanceState(outState);
         outState.putString(CURRENT_DIRECTORY, adapter.getCurrentDirectory().getAbsolutePath());
+    }
+
+    @Override
+    protected void onResume()
+    {
+        super.onResume();
+        recentAdapter.setUris(viewerPreferences.getRecent());        
     }
 }
