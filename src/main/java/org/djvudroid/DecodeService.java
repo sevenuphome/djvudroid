@@ -16,9 +16,36 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+/**
+ * A Java front-end to the JNI classes for decoding DJVUs.
+ *
+ * <p> {@link setContainerView} registers a <code>View</code> whose
+ * width is used as a baseline for scaling the document pages, thus
+ * creating "fit to width" scaling.  However, this width can by
+ * modified when requesting a page decode by passing {@link
+ * decodePage} a <code>zoom</code> parameter.  Specifying
+ * <code>zoom=1.0</code> will decode a page of exactly the width of
+ * the <code>View</code>.  Height is set to preserve aspect ratio.
+ *
+ * <p> Decoding is done asynchronously.  {@link decodePage} is passed
+ * (along with a page number and a zoom) an object implementing
+ * <code>DecodeCallback</code>, a public interface with a single
+ * method, <code>decodeComplete</code>, which is passed the decoded
+ * <code>Bitmap</code>.
+ *
+ * <p> The public class variable <code>twoUp</code> modifies the
+ * class's behavior by splitting each page in half along its vertical
+ * centerline, effectively doubling the number of pages in the
+ * document.  Changing this variable while decodes are in process
+ * yields undefined results.
+ *
+ */
+
 public class DecodeService
 {
     private final DjvuContext djvuContext;
+
+    public boolean twoUp = false;
 
     private View containerView;
     private DjvuDocument document;
@@ -91,7 +118,12 @@ public class DecodeService
             return;
         }
         Log.d(DJVU_DROID, "Starting decode of page: " + currentDecodeTask.pageNumber);
-        DjvuPage vuPage = document.getPage(currentDecodeTask.pageNumber);
+        DjvuPage vuPage;
+        if (!twoUp) {
+            vuPage = document.getPage(currentDecodeTask.pageNumber);
+        } else {
+            vuPage = document.getPage(currentDecodeTask.pageNumber / 2);
+        }
         preloadNextPage(currentDecodeTask.pageNumber);
 
         while (vuPage.isDecoding())
@@ -108,7 +140,14 @@ public class DecodeService
         }
         Log.d(DJVU_DROID, "Start converting map to bitmap");
         float scale = calculateScale(vuPage) * currentDecodeTask.zoom;
-        final Bitmap bitmap = vuPage.renderBitmap(getScaledWidth(vuPage, scale), getScaledHeight(vuPage, scale));
+        Bitmap bitmap;
+        if (!twoUp) {
+            bitmap = vuPage.renderBitmap(getScaledWidth(vuPage, scale), getScaledHeight(vuPage, scale));
+        } else {
+            bitmap = vuPage.renderBitmap(2*getScaledWidth(vuPage, scale), getScaledHeight(vuPage, scale));
+            bitmap = Bitmap.createBitmap(bitmap, (currentDecodeTask.pageNumber % 2) * getScaledWidth(vuPage, scale), 0,
+                                         getScaledWidth(vuPage, scale), getScaledHeight(vuPage, scale));
+        }
         Log.d(DJVU_DROID, "Converting map to bitmap finished");
         if (isTaskDead(currentDecodeTask))
         {
@@ -124,12 +163,20 @@ public class DecodeService
 
     private int getScaledWidth(DjvuPage vuPage, float scale)
     {
-        return (int) (scale * vuPage.getWidth());
+        if (!twoUp) {
+            return (int) (scale * vuPage.getWidth());
+        } else {
+            return (int) (0.5f * scale * vuPage.getWidth());
+        }
     }
 
     private float calculateScale(DjvuPage djvuPage)
     {
-        return 1.0f * getTargetWidth() / djvuPage.getWidth();
+        if (!twoUp) {
+            return 1.0f * getTargetWidth() / djvuPage.getWidth();
+        } else {
+            return 2.0f * getTargetWidth() / djvuPage.getWidth();
+        }
     }
 
     private void finishDecoding(DecodeTask currentDecodeTask, Bitmap bitmap)
@@ -140,12 +187,16 @@ public class DecodeService
 
     private void preloadNextPage(int pageNumber) throws IOException
     {
-        final int nextPage = pageNumber + 1;
+        final int nextPage = pageNumber + (twoUp ? 2 : 1);
         if (nextPage >= getPageCount())
         {
             return;
         }
-        document.getPage(nextPage);
+        if (!twoUp) {
+            document.getPage(nextPage);
+        } else {
+            document.getPage(nextPage / 2);
+        }
     }
 
     private void waitForDecode(DjvuPage vuPage)
@@ -185,7 +236,11 @@ public class DecodeService
 
     public int getPageCount()
     {
-        return document.getPageCount();
+        if (!twoUp) {
+            return document.getPageCount();
+        } else {
+            return 2 * document.getPageCount();
+        }
     }
 
     private class DecodeTask

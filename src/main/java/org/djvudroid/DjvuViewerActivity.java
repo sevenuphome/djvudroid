@@ -14,7 +14,8 @@ public class DjvuViewerActivity extends Activity
 {
     private static final int MENU_EXIT = 0;
     private static final int MENU_GOTO = 1;
-    private static final int MENU_FULL_SCREEN = 2;    
+    private static final int MENU_FULL_SCREEN = 2;
+    private static final int MENU_PAGE_LAYOUT = 3;
 
     private static final int DIALOG_GOTO = 0;
 
@@ -53,6 +54,7 @@ public class DjvuViewerActivity extends Activity
 
         final SharedPreferences sharedPreferences = getSharedPreferences(DOCUMENT_VIEW_STATE_PREFERENCES, 0);
         documentView.goToPage(sharedPreferences.getInt(getIntent().getData().toString(), 0));
+        decodeService.twoUp = sharedPreferences.getBoolean(getIntent().getData().toString() + ".twoUp", false);
         documentView.showDocument();
 
         viewerPreferences.addRecent(getIntent().getData());
@@ -100,6 +102,7 @@ public class DjvuViewerActivity extends Activity
         final SharedPreferences sharedPreferences = getSharedPreferences(DOCUMENT_VIEW_STATE_PREFERENCES, 0);
         final SharedPreferences.Editor editor = sharedPreferences.edit();
         editor.putInt(getIntent().getData().toString(), documentView.getCurrentPage());
+        editor.putBoolean(getIntent().getData().toString() + ".twoUp", decodeService.twoUp);
         editor.commit();
     }
 
@@ -110,6 +113,7 @@ public class DjvuViewerActivity extends Activity
         menu.add(0, MENU_GOTO, 0, "Go to page");
         final MenuItem menuItem = menu.add(0, MENU_FULL_SCREEN, 0, "Full screen").setCheckable(true).setChecked(viewerPreferences.isFullScreen());
         setFullScreenMenuItemText(menuItem);
+        menu.add(0, MENU_PAGE_LAYOUT, 0, "Toggle page layout");
         return true;
     }
 
@@ -138,6 +142,11 @@ public class DjvuViewerActivity extends Activity
                 finish();
                 startActivity(getIntent());
                 return true;
+            case MENU_PAGE_LAYOUT:
+	        decodeService.twoUp = !decodeService.twoUp;
+		documentView.setDecodeService(decodeService);
+		documentView.showDocument();
+		return true;
         }
         return false;
     }

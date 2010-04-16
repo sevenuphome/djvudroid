@@ -44,6 +44,15 @@ public class DjvuDocumentView extends ScrollView implements ZoomListener
     public void setDecodeService(DecodeService decodeService)
     {
         this.decodeService = decodeService;
+        if (isInitialized) {
+            stopDecodingAllPages();
+            pages.clear();
+            visiblePageNumToBitmap.clear();
+            pageIndexToAspectRatio.clear();
+            getMainLayout().removeAllViews();
+            isInitialized = false;
+            init();
+        }
     }
 
     private void init()
