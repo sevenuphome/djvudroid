@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.Iterator;
 
 public class DjvuDocumentView extends ScrollView implements ZoomListener
 {
@@ -41,13 +42,27 @@ public class DjvuDocumentView extends ScrollView implements ZoomListener
         scroller = new Scroller(getContext());
     }
 
+    /**
+     * Use this function instead of visiblePageNumToBitmap.clear()
+     * in order to recyle the bitmaps contained in the hash.
+     */
+
+    private void clear_visiblePageNumToBitmap()
+    {
+	Iterator iter = visiblePageNumToBitmap.values().iterator();
+	while (iter.hasNext()) {
+	    ((Bitmap) (iter.next())).recycle();
+	    iter.remove();
+	}
+    }
+
     public void setDecodeService(DecodeService decodeService)
     {
         this.decodeService = decodeService;
         if (isInitialized) {
             stopDecodingAllPages();
             pages.clear();
-            visiblePageNumToBitmap.clear();
+            clear_visiblePageNumToBitmap();
             pageIndexToAspectRatio.clear();
             getMainLayout().removeAllViews();
             isInitialized = false;

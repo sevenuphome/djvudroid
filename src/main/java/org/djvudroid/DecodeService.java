@@ -140,13 +140,14 @@ public class DecodeService
         }
         Log.d(DJVU_DROID, "Start converting map to bitmap");
         float scale = calculateScale(vuPage) * currentDecodeTask.zoom;
-        Bitmap bitmap;
+        final Bitmap bitmap;
         if (!twoUp) {
             bitmap = vuPage.renderBitmap(getScaledWidth(vuPage, scale), getScaledHeight(vuPage, scale));
         } else {
-            bitmap = vuPage.renderBitmap(2*getScaledWidth(vuPage, scale), getScaledHeight(vuPage, scale));
-            bitmap = Bitmap.createBitmap(bitmap, (currentDecodeTask.pageNumber % 2) * getScaledWidth(vuPage, scale), 0,
+            final Bitmap full_page_bitmap = vuPage.renderBitmap(2*getScaledWidth(vuPage, scale), getScaledHeight(vuPage, scale));
+            bitmap = Bitmap.createBitmap(full_page_bitmap, (currentDecodeTask.pageNumber % 2) * getScaledWidth(vuPage, scale), 0,
                                          getScaledWidth(vuPage, scale), getScaledHeight(vuPage, scale));
+	    full_page_bitmap.recycle();
         }
         Log.d(DJVU_DROID, "Converting map to bitmap finished");
         if (isTaskDead(currentDecodeTask))
