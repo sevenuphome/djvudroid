@@ -1,0 +1,1 @@
+ASTRO is now ready to work with DjvuDroid! Navigate to your djvu file in ASTRO and push on it. You should see application selection dialog where DjvuDroid should appear.
